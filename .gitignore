@@ -1,6 +1,12 @@
 # clasp authentication (stored globally at ~/.clasprc.json, not here)
 .clasprc.json
 
+# Local environment — contains LIBRARY_SCRIPT_ID; never commit
+.env
+
+# Generated at runtime from LIBRARY_SCRIPT_ID in .env; never commit
+library/.clasp.json
+
 # macOS
 .DS_Store
 

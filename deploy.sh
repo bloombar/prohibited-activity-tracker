@@ -5,19 +5,20 @@
 # Commands:
 #   ./deploy.sh setup-library
 #       Creates the Apps Script library project on Google Drive, pushes
-#       Prohibition.js, and prints the Script ID to paste into
-#       wrapper/appsscript.json. Run once per machine after 'clasp login'.
+#       Prohibition.js, and saves the Script ID to .env as LIBRARY_SCRIPT_ID.
+#       Run once per machine after 'clasp login'.
 #
-#   ./deploy.sh new [SPREADSHEET_ID]
-#       Creates a new bound script on an existing spreadsheet (if ID given)
-#       or on a brand-new spreadsheet (if omitted), pushes the wrapper, and
-#       deploys it as a web app. Saves the deployment ID to deployments/ and
-#       prints the exec URL to paste into the course repo's config.json.
+#   ./deploy.sh new [NAME] [FOLDER_ID]
+#       Creates a new spreadsheet and bound Apps Script (both named NAME,
+#       defaulting to "Prohibited Activity Logs"), optionally inside FOLDER_ID
+#       on Drive. Pushes the wrapper, deploys it as a web app, saves the
+#       deployment ID to deployments/, and prints the exec URL to paste into
+#       the course repo's .automations/config.json.
 #
 #   ./deploy.sh redeploy <DEPLOYMENT_ID>
-#       Pushes the current wrapper/doPost.js to an existing deployment,
-#       keeping the same exec URL. Use this instead of 'new' when updating
-#       a wrapper that is already in production.
+#       Pushes the current wrapper files to an existing deployment, keeping
+#       the same exec URL. Use this instead of 'new' when updating a wrapper
+#       that is already in production.
 #
 #   ./deploy.sh delete <DEPLOYMENT_ID>
 #       Removes a prior web app deployment from Google Apps Script and deletes
@@ -25,12 +26,21 @@
 #
 #   ./deploy.sh update-library
 #       Pushes local changes to Prohibition.js to the library project.
-#       All wrapper scripts using version 0 (HEAD) pick up the change
+#       All wrapper scripts using version "0" (HEAD) pick up the change
 #       automatically on next execution.
 
 set -e
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 DEPLOYMENTS_DIR="$REPO_DIR/deployments"
+
+# Load .env if present — sets LIBRARY_SCRIPT_ID and any other local vars.
+ENV_FILE="$REPO_DIR/.env"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "$ENV_FILE"
+  set +a
+fi
 
 # Verify clasp is authenticated before running any command.
 if [ ! -f "$HOME/.clasprc.json" ]; then
@@ -38,6 +48,42 @@ if [ ! -f "$HOME/.clasprc.json" ]; then
   echo "Run 'clasp login' first, then retry."
   exit 1
 fi
+
+# Require LIBRARY_SCRIPT_ID to be set (from .env or environment).
+_require_library_script_id() {
+  if [ -z "$LIBRARY_SCRIPT_ID" ]; then
+    echo "Error: LIBRARY_SCRIPT_ID is not set."
+    echo "Either run './deploy.sh setup-library' first, or add it to .env"
+    echo "  LIBRARY_SCRIPT_ID=your_script_id_here"
+    exit 1
+  fi
+}
+
+# Write library/.clasp.json from LIBRARY_SCRIPT_ID (file is gitignored).
+_write_library_clasp_json() {
+  printf '{\n  "scriptId": "%s",\n  "rootDir": "."\n}\n' \
+    "$LIBRARY_SCRIPT_ID" > "$REPO_DIR/library/.clasp.json"
+}
+
+# Copy wrapper files to TMP, substituting the real Script ID into appsscript.json.
+_copy_wrapper() {
+  local dest="$1"
+  sed "s/LIBRARY_SCRIPT_ID_PLACEHOLDER/$LIBRARY_SCRIPT_ID/g" \
+    "$REPO_DIR/wrapper/appsscript.json" > "$dest/appsscript.json"
+  cp "$REPO_DIR/wrapper/doPost.js" "$dest/"
+}
+
+# Save or update a key=value line in .env.
+_set_env_var() {
+  local key="$1" value="$2"
+  if grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
+    TMP_ENV=$(mktemp)
+    sed "s|^${key}=.*|${key}=${value}|" "$ENV_FILE" > "$TMP_ENV"
+    mv "$TMP_ENV" "$ENV_FILE"
+  else
+    echo "${key}=${value}" >> "$ENV_FILE"
+  fi
+}
 
 _print_exec_url() {
   local deployment_id="$1"
@@ -54,24 +100,28 @@ case "$1" in
     cd "$REPO_DIR/library"
     clasp create --type standalone --title "Prohibition Activity Tracker Library"
     clasp push
+    LIBRARY_SCRIPT_ID=$(grep '"scriptId"' .clasp.json | sed 's/.*: *"\(.*\)".*/\1/')
+    _set_env_var "LIBRARY_SCRIPT_ID" "$LIBRARY_SCRIPT_ID"
     echo ""
     echo "Library created and pushed."
-    echo "Script ID (copy this into wrapper/appsscript.json):"
-    grep '"scriptId"' .clasp.json | sed 's/.*: *"\(.*\)".*/\1/'
+    echo "Script ID saved to .env as LIBRARY_SCRIPT_ID:"
+    echo ""
+    echo "  $LIBRARY_SCRIPT_ID"
     ;;
 
   new)
+    _require_library_script_id
+    SHEET_TITLE="${2:-Prohibited Activity Logs}"
     TMP=$(mktemp -d)
     cd "$TMP"
-    if [ -n "$2" ]; then
-      clasp create --type sheets --parentId "$2" --title "Prohibited Activity Logs"
+    if [ -n "$3" ]; then
+      clasp create --type sheets --parentId "$3" --title "$SHEET_TITLE"
     else
-      clasp create --type sheets --title "Prohibited Activity Logs"
+      clasp create --type sheets --title "$SHEET_TITLE"
     fi
     # Copy AFTER clasp create — it clones a default appsscript.json which would
     # overwrite ours if copied beforehand, stripping the webapp block and library dep.
-    cp "$REPO_DIR/wrapper/appsscript.json" "$TMP/"
-    cp "$REPO_DIR/wrapper/doPost.js" "$TMP/"
+    _copy_wrapper "$TMP"
     clasp push
     DEPLOYMENT_ID=$(clasp deploy --description "initial" | grep -o 'AKfycb[^ ]*')
 
@@ -86,6 +136,7 @@ case "$1" in
     ;;
 
   redeploy)
+    _require_library_script_id
     if [ -z "$2" ]; then
       echo "Usage: $0 redeploy <DEPLOYMENT_ID>"
       echo ""
@@ -105,8 +156,7 @@ case "$1" in
     SCRIPT_ID=$(grep '"scriptId"' "$RECORD" | sed 's/.*: *"\(.*\)".*/\1/')
 
     TMP=$(mktemp -d)
-    cp "$REPO_DIR/wrapper/appsscript.json" "$TMP/"
-    cp "$REPO_DIR/wrapper/doPost.js" "$TMP/"
+    _copy_wrapper "$TMP"
     printf '{\n  "scriptId": "%s",\n  "rootDir": "."\n}\n' "$SCRIPT_ID" > "$TMP/.clasp.json"
     cd "$TMP"
     clasp push
@@ -143,16 +193,18 @@ case "$1" in
     ;;
 
   update-library)
+    _require_library_script_id
+    _write_library_clasp_json
     cd "$REPO_DIR/library"
     clasp push
     echo ""
-    echo "Library updated. All wrappers using version 0 (HEAD) will use the new code."
+    echo "Library updated. All wrappers using version \"0\" (HEAD) will use the new code."
     ;;
 
   *)
     echo "Usage:"
-    echo "  $0 setup-library                  — first-time library creation"
-    echo "  $0 new [SPREADSHEET_ID]           — deploy to new or existing spreadsheet"
+    echo "  $0 setup-library                  — first-time library creation, saves ID to .env"
+    echo "  $0 new [NAME] [FOLDER_ID]         — deploy; NAME sets both sheet and script title"
     echo "  $0 redeploy <DEPLOYMENT_ID>       — update wrapper in-place, keep same exec URL"
     echo "  $0 delete <DEPLOYMENT_ID>         — remove a prior deployment"
     echo "  $0 update-library                 — push Prohibition.js changes to library"

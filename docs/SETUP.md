@@ -2,10 +2,9 @@
 
 Perform these steps once per machine, and once ever for the library itself.
 
-## Prerequisites
+## 1. Install clasp and authenticate
 
-You need Node.js installed. Then install the clasp CLI and authenticate — **both steps
-are required** before any `deploy.sh` command will work:
+You need Node.js installed. Then install the clasp CLI and authenticate:
 
 ```bash
 npm install -g @google/clasp
@@ -13,51 +12,57 @@ clasp login          # opens a browser — sign in with your Google account
 ```
 
 `clasp login` writes credentials to `~/.clasprc.json`. This is a one-time step per
-machine; once done, all future `deploy.sh` calls use those credentials automatically.
+machine; all future `deploy.sh` calls use those credentials automatically.
 
-## Create and deploy the library
+## 2. Create and deploy the library
 
-Run the setup command from the repo root:
+Run this from the repo root:
 
 ```bash
 ./deploy.sh setup-library
 ```
 
-This does three things automatically:
+This does four things automatically:
 
 1. Creates a new standalone Apps Script project on your Google Drive titled
    "Prohibition Activity Tracker Library"
 2. Pushes `library/Prohibition.js` and `library/appsscript.json` to it
-3. Prints the Script ID
+3. Writes `LIBRARY_SCRIPT_ID=<id>` into a local `.env` file (gitignored)
+4. Prints the Script ID for reference
 
-**After it runs**, copy the Script ID into `wrapper/appsscript.json`, replacing the
-placeholder:
+Output looks like:
 
-```json
-{
-  "dependencies": {
-    "libraries": [
-      {
-        "userSymbol": "Prohibition",
-        "scriptId": "PASTE_SCRIPT_ID_HERE",
-        ...
-      }
-    ]
-  }
-}
+```
+Library created and pushed.
+Script ID saved to .env as LIBRARY_SCRIPT_ID:
+
+  1_tdlX4gOk_jkb9guKpe6OB9HHMQPflz1lizNLXBRVSkDi7IG-DrSYT6q
 ```
 
-Commit that change so future deployments use the correct library.
+From this point on, every `deploy.sh` command reads `LIBRARY_SCRIPT_ID` from `.env`
+automatically. No manual copy-pasting of the Script ID is needed.
+
+## Setting up on a second machine
+
+If you clone this repo onto another machine after the library already exists:
+
+1. Run `clasp login`
+2. Copy `.env` from the original machine (or create it manually):
+
+```dotenv
+LIBRARY_SCRIPT_ID=your_existing_script_id_here
+```
+
+All `deploy.sh` commands will then work as normal.
 
 ## What "version 0" means
 
-The wrapper references the library at `"version": 0`, which means **HEAD** — always
-the latest pushed version of `Prohibition.js`. This is convenient for active development.
-If you need stability across many deployed sheets, change `0` to a specific version
-number after running `clasp version "description"` in the `library/` directory.
+`"version": "0"` means **HEAD** — always the latest pushed version of `Prohibition.js`.
+This is the right default during active development. If you need a subset of sheets to
+stay on a stable version while you develop changes, see [UPDATING.md](UPDATING.md).
 
 ## Verify the library is reachable
 
-In the Apps Script console (script.google.com), open the library project.
-Under **Project Settings**, confirm the Script ID matches what is in
+In the Apps Script console at [script.google.com](https://script.google.com), open the
+library project. Under **Project Settings**, confirm the Script ID matches what is in
 `library/.clasp.json` and `wrapper/appsscript.json`.
