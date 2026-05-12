@@ -7,10 +7,10 @@ hook events to a Google Spreadsheet via a Google Apps Script web app.
 
 The Google Apps Script library contained in this repository is set up once as a Library withn Google Apps Scripts. That Library can be then imported into as many course-specific spreadsheets as desired. Updating the library implements the update across all spreadsheets using it. Setting up the library and attaching it to spreadsheets is handled through a simple `./deploy.sh` script included in this repository.
 
-The flow once the Library has been setup and imported into a course-specific spreadsheet:
+The flow once the Library has been [setup](docs/SETUP.md), [imported into a Google Sheet](docs/NEW_SPREADSHEET.md) and associated tracking code [added to student repostories](docs/IMPLEMENTING.md):
 
 1. Student edits a file directly with an agentic AI tool.
-2. Editor hook fires `give-student-credit.py` (a Python script placed into the student's repo by the instructor)
+2. Editor hook fires [give-student-credit.py](./examples/.automations/give-student-credit.py) (a Python script placed into the student's repo by the instructor)
 3. The script sends a POST request including a JSON payload to the Google Apps Script "wrapper" bound to the spreadsheet.
 4. The Apps Script wrapper invokes the library, which handles the logic.
 5. The Library logs the data received in the POST request as a new row into the sheet for the instructor to later review.
