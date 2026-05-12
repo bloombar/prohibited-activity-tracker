@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "hooks": {
+    "postToolUse": [
+      {
+        "type": "command",
+        "command": "python3 .automations/give-student-credit.py --tool=copilot --event=postToolUse || python .automations/give-student-credit.py --tool=copilot --event=postToolUse"
+      }
+    ]
+  }
+}

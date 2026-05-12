@@ -1,7 +1,6 @@
 # Deploying to a New Spreadsheet
 
-Run this once per course or semester. Each deployment creates one Google Spreadsheet
-and one bound Apps Script project, then publishes the script as a web app.
+Run this once per course. Each deployment creates one Google Spreadsheet and one bound Apps Script project, then publishes the script as a web app.
 
 ## Command
 
@@ -11,11 +10,11 @@ and one bound Apps Script project, then publishes the script as a web app.
 
 Both arguments are optional:
 
-| Invocation | Effect |
-| ---------- | ------ |
-| `./deploy.sh new` | Creates spreadsheet named "Prohibited Activity Logs" in your Drive root |
-| `./deploy.sh new "Web Design Fall 2026"` | Custom name, Drive root |
-| `./deploy.sh new "Web Design Fall 2026" <FOLDER_ID>` | Custom name, specific Drive folder |
+| Invocation                                           | Effect                                                                  |
+| ---------------------------------------------------- | ----------------------------------------------------------------------- |
+| `./deploy.sh new`                                    | Creates spreadsheet named "Prohibited Activity Logs" in your Drive root |
+| `./deploy.sh new "Web Design Fall 2026"`             | Custom name, Drive root                                                 |
+| `./deploy.sh new "Web Design Fall 2026" <FOLDER_ID>` | Custom name, specific Drive folder                                      |
 
 `FOLDER_ID` is the ID from a Google Drive folder URL:
 `https://drive.google.com/drive/folders/<FOLDER_ID>`
@@ -32,7 +31,7 @@ Exec URL (paste into your course repo's .automations/config.json):
   https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec
 ```
 
-Paste this into the course repo's `.automations/config.json`:
+Paste this into the course repo's [.automations/config.json](../examples/.automations/config.json):
 
 ```json
 {
@@ -41,8 +40,7 @@ Paste this into the course repo's `.automations/config.json`:
 }
 ```
 
-The exec URL (ending in `/exec`) is permanent for this deployment — it does not
-change when you push code updates via `redeploy`.
+The exec URL (ending in `/exec`) is permanent for this deployment — it does not change when you push code updates via `redeploy`.
 
 ## Authorize the web app (first access only)
 
@@ -51,22 +49,17 @@ to grant OAuth consent for the Sheets scope. To trigger this:
 
 1. Open the newly created Apps Script project at [script.google.com](https://script.google.com)
 2. Select **Run → Run function → doPost** (or any function)
-3. A permissions dialog will appear — click **Review permissions**, choose your
-   Google account, and click **Allow**
+3. A permissions dialog will appear — click **Review permissions**, choose your Google account, and click **Allow**
 
-Once authorized, all incoming POST requests are handled automatically with no further
-interaction.
+Once authorized, all incoming POST requests are handled automatically with no further interaction.
 
 ## One deployment = one spreadsheet
 
-A deployment is permanently bound to the spreadsheet that was created with it. There
-is no way to rebind it to a different spreadsheet. This is by design — each course or
-semester gets its own spreadsheet and its own exec URL in `config.json`.
+A deployment is permanently bound to the spreadsheet that was created with it. There is no way to rebind it to a different spreadsheet. This is by design — each course or semester gets its own spreadsheet and its own exec URL in `config.json`.
 
 ## Redeploying wrapper code
 
-If you change `wrapper/doPost.js` or `wrapper/appsscript.json` (but not the library
-logic), update an existing deployment in-place without changing the exec URL:
+If you change `wrapper/doPost.js` or `wrapper/appsscript.json` (but not the library logic), update an existing deployment in-place without changing the exec URL:
 
 ```bash
 ./deploy.sh redeploy <DEPLOYMENT_ID>
