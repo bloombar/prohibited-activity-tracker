@@ -6,3 +6,6 @@
 
 # Temporary directories created by deploy.sh
 /tmp/
+
+# Per-machine deployment records (script IDs vary by Google account)
+/deployments/
