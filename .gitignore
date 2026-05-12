@@ -1,0 +1,8 @@
+# clasp authentication (stored globally at ~/.clasprc.json, not here)
+.clasprc.json
+
+# macOS
+.DS_Store
+
+# Temporary directories created by deploy.sh
+/tmp/
