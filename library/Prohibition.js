@@ -21,13 +21,14 @@ const getConfig = () => {
   };
 };
 
-const getSheet = () => {
+const getSheet = (ss) => {
   /**
-   * Returns the spreadsheet in which to log the activity.
+   * Returns the named worksheet within the given spreadsheet, creating it if absent.
+   * ss must be passed in by the caller — getActiveSpreadsheet() returns null in
+   * library context when invoked via a web app doPost.
    */
   const config = getConfig();
-  const ss = SpreadsheetApp.getActiveSpreadsheet(); // container spreadsheet
-  let sheet = ss.getSheetByName(config.logsSheetName); // specific worksheet
+  let sheet = ss.getSheetByName(config.logsSheetName);
   if (sheet == null) {
     // create worksheet if none
     sheet = ss.insertSheet(config.logsSheetName);
@@ -36,7 +37,7 @@ const getSheet = () => {
   return sheet;
 };
 
-function doPost(e) {
+function doPost(e, ss) {
   /**
    * Logs incoming POST request with JSON array of objects in body, e.g.
    * {
@@ -55,7 +56,7 @@ function doPost(e) {
   // Logger.log(JSON.stringify(e, null, 2))
   const commit_data = JSON.parse(e.postData.contents); // should be an array of objects
   const config = getConfig();
-  const sheet = getSheet();
+  const sheet = getSheet(ss);
   // response object
   const res = {
     type: "post",

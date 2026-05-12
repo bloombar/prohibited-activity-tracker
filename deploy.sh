@@ -22,6 +22,13 @@
 set -e
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# Verify clasp is authenticated before running any command.
+if [ ! -f "$HOME/.clasprc.json" ]; then
+  echo "Error: clasp credentials not found."
+  echo "Run 'clasp login' first, then retry."
+  exit 1
+fi
+
 case "$1" in
 
   setup-library)

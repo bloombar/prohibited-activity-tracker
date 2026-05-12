@@ -4,17 +4,16 @@ Perform these steps once per machine, and once ever for the library itself.
 
 ## Prerequisites
 
-You need Node.js installed. Then install the clasp CLI:
+You need Node.js installed. Then install the clasp CLI and authenticate — **both steps
+are required** before any `deploy.sh` command will work:
 
 ```bash
 npm install -g @google/clasp
+clasp login          # opens a browser — sign in with your Google account
 ```
 
-Authenticate clasp with your Google account (opens a browser window):
-
-```bash
-clasp login
-```
+`clasp login` writes credentials to `~/.clasprc.json`. This is a one-time step per
+machine; once done, all future `deploy.sh` calls use those credentials automatically.
 
 ## Create and deploy the library
 
