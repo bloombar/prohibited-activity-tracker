@@ -26,7 +26,7 @@ clasp login
 
 Run `./deploy.sh` to see command line arguments:
 
-```bash
+```txt
 Usage:
   ./deploy.sh setup-library                  — first-time library creation, saves ID to .env... do it once.
   ./deploy.sh update-library                 — push Prohibition.js changes to library... do only if library code changed
