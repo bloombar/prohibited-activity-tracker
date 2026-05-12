@@ -144,6 +144,38 @@ case "$1" in
     else
       SHEET_URL=""
     fi
+
+    # clasp ignores --parentId for sheet-bound scripts; move the file via Drive API.
+    if [ -n "$FOLDER_ID" ] && [ -n "$SHEET_FILE_ID" ]; then
+      python3 - "$SHEET_FILE_ID" "$FOLDER_ID" <<'PYEOF'
+import json, sys
+from pathlib import Path
+from urllib.request import Request, urlopen
+from urllib.error import URLError
+
+file_id, folder_id = sys.argv[1], sys.argv[2]
+try:
+    creds = json.loads(Path.home().joinpath('.clasprc.json').read_text())
+    token = creds['token']['access_token']
+except Exception as e:
+    print(f"Warning: could not read clasp credentials: {e}")
+    sys.exit(0)
+
+headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+base = 'https://www.googleapis.com/drive/v3/files'
+try:
+    req = Request(f'{base}/{file_id}?fields=parents', headers={'Authorization': f'Bearer {token}'})
+    old_parents = ','.join(json.loads(urlopen(req).read()).get('parents', []))
+    url = f'{base}/{file_id}?addParents={folder_id}'
+    if old_parents:
+        url += f'&removeParents={old_parents}'
+    urlopen(Request(url, data=b'{}', method='PATCH', headers=headers))
+    print(f"Spreadsheet moved to folder {folder_id}.")
+except URLError as e:
+    print(f"Warning: could not move spreadsheet to folder: {e}")
+    print("The deployment will continue; move the file manually in Google Drive if needed.")
+PYEOF
+    fi
     SCRIPT_ID=$(grep '"scriptId"' .clasp.json | sed 's/.*: *"\(.*\)".*/\1/')
 
     # Copy AFTER clasp create — it clones a default appsscript.json which would
@@ -208,7 +240,8 @@ case "$1" in
       echo ""
       echo "Known deployments:"
       ls "$DEPLOYMENTS_DIR"/*.json 2>/dev/null | while read f; do
-        echo "  $(basename "$f" .json)"
+        title=$(grep '"title"' "$f" | sed 's/.*: *"\(.*\)".*/\1/')
+        echo "  $(basename "$f" .json)  ($title)"
       done
       exit 1
     fi
