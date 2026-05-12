@@ -62,14 +62,16 @@ case "$1" in
 
   new)
     TMP=$(mktemp -d)
-    cp "$REPO_DIR/wrapper/appsscript.json" "$TMP/"
-    cp "$REPO_DIR/wrapper/doPost.js" "$TMP/"
     cd "$TMP"
     if [ -n "$2" ]; then
       clasp create --type sheets --parentId "$2" --title "Prohibited Activity Logs"
     else
       clasp create --type sheets --title "Prohibited Activity Logs"
     fi
+    # Copy AFTER clasp create — it clones a default appsscript.json which would
+    # overwrite ours if copied beforehand, stripping the webapp block and library dep.
+    cp "$REPO_DIR/wrapper/appsscript.json" "$TMP/"
+    cp "$REPO_DIR/wrapper/doPost.js" "$TMP/"
     clasp push
     DEPLOYMENT_ID=$(clasp deploy --description "initial" | grep -o 'AKfycb[^ ]*')
 
