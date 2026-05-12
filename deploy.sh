@@ -112,13 +112,19 @@ case "$1" in
   new)
     _require_library_script_id
     SHEET_TITLE="${2:-Prohibited Activity Logs}"
+    FOLDER_ID="${3:-}"
     TMP=$(mktemp -d)
     cd "$TMP"
-    if [ -n "$3" ]; then
-      clasp create --type sheets --parentId "$3" --title "$SHEET_TITLE"
+    if [ -n "$FOLDER_ID" ]; then
+      CREATE_OUTPUT=$(clasp create --type sheets --parentId "$FOLDER_ID" --title "$SHEET_TITLE")
     else
-      clasp create --type sheets --title "$SHEET_TITLE"
+      CREATE_OUTPUT=$(clasp create --type sheets --title "$SHEET_TITLE")
     fi
+    echo "$CREATE_OUTPUT"
+
+    # Extract the spreadsheet URL printed by clasp create.
+    SHEET_URL=$(echo "$CREATE_OUTPUT" | grep -o 'https://docs.google.com/spreadsheets/d/[^ ]*')
+
     # Copy AFTER clasp create — it clones a default appsscript.json which would
     # overwrite ours if copied beforehand, stripping the webapp block and library dep.
     _copy_wrapper "$TMP"
@@ -129,8 +135,8 @@ case "$1" in
     mkdir -p "$DEPLOYMENTS_DIR"
     SCRIPT_ID=$(grep '"scriptId"' .clasp.json | sed 's/.*: *"\(.*\)".*/\1/')
     RECORD="$DEPLOYMENTS_DIR/${DEPLOYMENT_ID}.json"
-    printf '{\n  "scriptId": "%s",\n  "deploymentId": "%s"\n}\n' \
-      "$SCRIPT_ID" "$DEPLOYMENT_ID" > "$RECORD"
+    printf '{\n  "scriptId": "%s",\n  "deploymentId": "%s",\n  "title": "%s",\n  "folderId": "%s",\n  "sheetUrl": "%s"\n}\n' \
+      "$SCRIPT_ID" "$DEPLOYMENT_ID" "$SHEET_TITLE" "$FOLDER_ID" "$SHEET_URL" > "$RECORD"
 
     _print_exec_url "$DEPLOYMENT_ID"
     ;;
