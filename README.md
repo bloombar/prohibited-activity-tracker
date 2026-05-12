@@ -37,13 +37,14 @@ Usage:
 
 To summarize:
 
-| Task                         | Command                                |
-| ---------------------------- | -------------------------------------- |
-| First-time library setup     | `./deploy.sh setup-library`            |
-| New course spreadsheet       | `./deploy.sh new [NAME] [FOLDER_ID]`   |
-| Update wrapper code in-place | `./deploy.sh redeploy <DEPLOYMENT_ID>` |
-| Delete a deployment          | `./deploy.sh delete <DEPLOYMENT_ID>`   |
-| Push a Prohibition.js update | `./deploy.sh update-library`           |
+| Task                          | Command                                     |
+| ----------------------------- | ------------------------------------------- |
+| First-time library setup      | `./deploy.sh setup-library`                 |
+| New course spreadsheet        | `./deploy.sh new [NAME] [FOLDER_ID]`        |
+| Add tracker to a student repo | `./implement.sh <DEPLOYMENT_ID> <REPO_URL>` |
+| Update wrapper code in-place  | `./deploy.sh redeploy <DEPLOYMENT_ID>`      |
+| Delete a deployment           | `./deploy.sh delete <DEPLOYMENT_ID>`        |
+| Push a Prohibition.js update  | `./deploy.sh update-library`                |
 
 Each `./deploy.sh new` creates one spreadsheet and one bound Apps Script. Run it once per course; each deployment has its own `exec` URL that goes into that course repo's `.automations/config.json`.
 
@@ -60,11 +61,14 @@ wrapper/          Template for each spreadsheet's bound script
   appsscript.json Webapp config + library dependency
 
 deploy.sh         Automation helper — run this for all deploy operations
+implement.sh      Copies examples/ into a student repo and pushes in one command
 deployments/      Auto-created; stores scriptId + deploymentId per deployment
+examples/         Template files to place into each student repository
 docs/             Full documentation
   SETUP.md        One-time setup walkthrough
   NEW_SPREADSHEET.md  Per-sheet deployment workflow
   UPDATING.md     How to push Prohibition.js changes
+  IMPLEMENTING.md How to add tracking files to student repositories
 ```
 
 ## Detailed docs
