@@ -24,6 +24,11 @@
 #       Removes a prior web app deployment from Google Apps Script and deletes
 #       its saved record from deployments/. The exec URL stops working immediately.
 #
+#   ./deploy.sh finalize <SCRIPT_ID> [NAME]
+#       Pushes wrapper files to an existing Apps Script project that was already
+#       created (e.g. by a failed 'new' run), deploys it as a web app, and saves
+#       the deployment record. Use this to recover from a partial 'new' failure.
+#
 #   ./deploy.sh update-library
 #       Pushes local changes to Prohibition.js to the library project.
 #       All wrapper scripts using version "0" (HEAD) pick up the change
@@ -99,7 +104,7 @@ case "$1" in
   setup-library)
     cd "$REPO_DIR/library"
     clasp create --type standalone --title "Prohibition Activity Tracker Library"
-    clasp push
+    clasp push --force
     LIBRARY_SCRIPT_ID=$(grep '"scriptId"' .clasp.json | sed 's/.*: *"\(.*\)".*/\1/')
     _set_env_var "LIBRARY_SCRIPT_ID" "$LIBRARY_SCRIPT_ID"
     echo ""
@@ -115,29 +120,84 @@ case "$1" in
     FOLDER_ID="${3:-}"
     TMP=$(mktemp -d)
     cd "$TMP"
+    # Capture both stdout and stderr — newer clasp versions write to stderr.
     if [ -n "$FOLDER_ID" ]; then
-      CREATE_OUTPUT=$(clasp create --type sheets --parentId "$FOLDER_ID" --title "$SHEET_TITLE")
+      CREATE_OUTPUT=$(clasp create --type sheets --parentId "$FOLDER_ID" --title "$SHEET_TITLE" 2>&1)
     else
-      CREATE_OUTPUT=$(clasp create --type sheets --title "$SHEET_TITLE")
+      CREATE_OUTPUT=$(clasp create --type sheets --title "$SHEET_TITLE" 2>&1)
     fi
     echo "$CREATE_OUTPUT"
 
-    # Extract the spreadsheet URL printed by clasp create.
-    SHEET_URL=$(echo "$CREATE_OUTPUT" | grep -o 'https://docs.google.com/spreadsheets/d/[^ ]*')
+    # Abort early if clasp create did not produce a .clasp.json (e.g. bad folder ID).
+    if [ ! -f ".clasp.json" ]; then
+      echo ""
+      echo "Error: clasp create failed — .clasp.json was not created."
+      echo "If you passed a FOLDER_ID, verify it is a valid Google Drive folder ID."
+      exit 1
+    fi
+
+    # clasp create prints the document as a Drive URL: https://drive.google.com/open?id=<ID>
+    # Extract the file ID and build a direct spreadsheet URL.
+    SHEET_FILE_ID=$(echo "$CREATE_OUTPUT" | grep -o 'open?id=[^ ]*' | sed 's/open?id=//' || true)
+    if [ -n "$SHEET_FILE_ID" ]; then
+      SHEET_URL="https://docs.google.com/spreadsheets/d/${SHEET_FILE_ID}/edit"
+    else
+      SHEET_URL=""
+    fi
+    SCRIPT_ID=$(grep '"scriptId"' .clasp.json | sed 's/.*: *"\(.*\)".*/\1/')
 
     # Copy AFTER clasp create — it clones a default appsscript.json which would
     # overwrite ours if copied beforehand, stripping the webapp block and library dep.
     _copy_wrapper "$TMP"
-    clasp push
-    DEPLOYMENT_ID=$(clasp deploy --description "initial" | grep -o 'AKfycb[^ ]*')
+    echo "Pushing files: $(ls -1 "$TMP" | grep -v '^\.' | tr '\n' ' ')"
+    clasp push --force
+    DEPLOY_OUTPUT=$(clasp deploy --description "initial" 2>&1)
+    echo "$DEPLOY_OUTPUT"
+    DEPLOYMENT_ID=$(echo "$DEPLOY_OUTPUT" | grep -o 'AKfycb[^ ]*' || true)
+    if [ -z "$DEPLOYMENT_ID" ]; then
+      echo ""
+      echo "Error: could not extract deployment ID from clasp output above."
+      echo "The script project was created with ID: $SCRIPT_ID"
+      echo "To complete the deployment manually, run:"
+      echo "  ./deploy.sh finalize $SCRIPT_ID \"$SHEET_TITLE\""
+      exit 1
+    fi
 
     # Save deployment info so 'redeploy' can update it in-place later.
     mkdir -p "$DEPLOYMENTS_DIR"
-    SCRIPT_ID=$(grep '"scriptId"' .clasp.json | sed 's/.*: *"\(.*\)".*/\1/')
     RECORD="$DEPLOYMENTS_DIR/${DEPLOYMENT_ID}.json"
     printf '{\n  "scriptId": "%s",\n  "deploymentId": "%s",\n  "title": "%s",\n  "folderId": "%s",\n  "sheetUrl": "%s"\n}\n' \
       "$SCRIPT_ID" "$DEPLOYMENT_ID" "$SHEET_TITLE" "$FOLDER_ID" "$SHEET_URL" > "$RECORD"
 
+    _print_exec_url "$DEPLOYMENT_ID"
+    ;;
+
+  finalize)
+    _require_library_script_id
+    if [ -z "$2" ]; then
+      echo "Usage: $0 finalize <SCRIPT_ID> [NAME]"
+      exit 1
+    fi
+    SCRIPT_ID="$2"
+    SHEET_TITLE="${3:-Prohibited Activity Logs}"
+    TMP=$(mktemp -d)
+    _copy_wrapper "$TMP"
+    printf '{\n  "scriptId": "%s",\n  "rootDir": "."\n}\n' "$SCRIPT_ID" > "$TMP/.clasp.json"
+    cd "$TMP"
+    echo "Pushing files: $(ls -1 "$TMP" | grep -v '^\.' | tr '\n' ' ')"
+    clasp push --force
+    DEPLOY_OUTPUT=$(clasp deploy --description "initial" 2>&1)
+    echo "$DEPLOY_OUTPUT"
+    DEPLOYMENT_ID=$(echo "$DEPLOY_OUTPUT" | grep -o 'AKfycb[^ ]*' || true)
+    if [ -z "$DEPLOYMENT_ID" ]; then
+      echo ""
+      echo "Error: could not extract deployment ID from clasp output above."
+      exit 1
+    fi
+    mkdir -p "$DEPLOYMENTS_DIR"
+    RECORD="$DEPLOYMENTS_DIR/${DEPLOYMENT_ID}.json"
+    printf '{\n  "scriptId": "%s",\n  "deploymentId": "%s",\n  "title": "%s",\n  "folderId": "",\n  "sheetUrl": ""\n}\n' \
+      "$SCRIPT_ID" "$DEPLOYMENT_ID" "$SHEET_TITLE" > "$RECORD"
     _print_exec_url "$DEPLOYMENT_ID"
     ;;
 
@@ -165,7 +225,7 @@ case "$1" in
     _copy_wrapper "$TMP"
     printf '{\n  "scriptId": "%s",\n  "rootDir": "."\n}\n' "$SCRIPT_ID" > "$TMP/.clasp.json"
     cd "$TMP"
-    clasp push
+    clasp push --force
     clasp deploy --deploymentId "$DEPLOYMENT_ID" --description "update"
 
     _print_exec_url "$DEPLOYMENT_ID"
@@ -202,7 +262,7 @@ case "$1" in
     _require_library_script_id
     _write_library_clasp_json
     cd "$REPO_DIR/library"
-    clasp push
+    clasp push --force
     echo ""
     echo "Library updated. All wrappers using version \"0\" (HEAD) will use the new code."
     ;;
@@ -211,7 +271,8 @@ case "$1" in
     echo "Usage:"
     echo "  $0 setup-library                  — first-time library creation, saves ID to .env"
     echo "  $0 new [NAME] [FOLDER_ID]         — deploy; NAME sets both sheet and script title"
-    echo "  $0 redeploy <DEPLOYMENT_ID>       — update wrapper in-place, keep same exec URL"
+    echo "  $0 finalize <SCRIPT_ID> [NAME]    — push + deploy an already-created script project
+  $0 redeploy <DEPLOYMENT_ID>       — update wrapper in-place, keep same exec URL"
     echo "  $0 delete <DEPLOYMENT_ID>         — remove a prior deployment"
     echo "  $0 update-library                 — push Prohibition.js changes to library"
     exit 1
