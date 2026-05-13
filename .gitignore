@@ -15,3 +15,22 @@ library/.clasp.json
 
 # Per-machine deployment records (script IDs vary by Google account)
 /deployments/
+
+.claude
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.coverage
+.coveragerc_cache/
+htmlcov/
+
+# Pipenv
+Pipfile.lock
+
+# JavaScript / Node
+node_modules/
+coverage/
+*.log

@@ -80,3 +80,8 @@ function doPost(e, ss) {
     JSON.stringify(res, null, 2),
   ).setMimeType(ContentService.MimeType.JSON);
 }
+
+/* istanbul ignore next */
+if (typeof module !== "undefined") {
+  module.exports = { getConfig, getSheet, doPost };
+}
