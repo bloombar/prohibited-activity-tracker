@@ -148,23 +148,44 @@ case "$1" in
     # clasp ignores --parentId for sheet-bound scripts; move the file via Drive API.
     if [ -n "$FOLDER_ID" ] && [ -n "$SHEET_FILE_ID" ]; then
       python3 - "$SHEET_FILE_ID" "$FOLDER_ID" <<'PYEOF'
-import json, sys
+import json, sys, time
 from pathlib import Path
 from urllib.request import Request, urlopen
 from urllib.error import URLError
+from urllib.parse import urlencode
 
 file_id, folder_id = sys.argv[1], sys.argv[2]
 try:
     creds = json.loads(Path.home().joinpath('.clasprc.json').read_text())
-    token = creds['token']['access_token']
+    # clasp v2 uses "token.access_token"; newer clasp uses "tokens.default.*"
+    token_data = creds.get('token') or creds.get('tokens', {}).get('default') or {}
+    if not token_data:
+        raise KeyError("no token block found in .clasprc.json")
+    access_token = token_data['access_token']
+    expiry = token_data.get('expiry_date', 0)
+    # Refresh if expired or expiring within 60 seconds.
+    if expiry and expiry < (time.time() * 1000 + 60_000):
+        refresh_token = token_data.get('refresh_token', '')
+        client_id = token_data.get('client_id') or creds.get('oauth2ClientSettings', {}).get('clientId', '')
+        client_secret = token_data.get('client_secret') or creds.get('oauth2ClientSettings', {}).get('clientSecret', '')
+        if refresh_token and client_id and client_secret:
+            body = urlencode({
+                'client_id': client_id,
+                'client_secret': client_secret,
+                'refresh_token': refresh_token,
+                'grant_type': 'refresh_token',
+            }).encode()
+            resp = json.loads(urlopen(Request('https://oauth2.googleapis.com/token', data=body)).read())
+            access_token = resp.get('access_token', access_token)
 except Exception as e:
-    print(f"Warning: could not read clasp credentials: {e}")
+    print(f"Warning: could not load clasp token: {e}")
+    print("The deployment will continue; move the file manually in Google Drive if needed.")
     sys.exit(0)
 
-headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+headers = {'Authorization': f'Bearer {access_token}', 'Content-Type': 'application/json'}
 base = 'https://www.googleapis.com/drive/v3/files'
 try:
-    req = Request(f'{base}/{file_id}?fields=parents', headers={'Authorization': f'Bearer {token}'})
+    req = Request(f'{base}/{file_id}?fields=parents', headers={'Authorization': f'Bearer {access_token}'})
     old_parents = ','.join(json.loads(urlopen(req).read()).get('parents', []))
     url = f'{base}/{file_id}?addParents={folder_id}'
     if old_parents:
